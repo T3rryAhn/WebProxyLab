@@ -16,6 +16,7 @@ void get_filetype(char *filename, char *filetype);
 void serve_dynamic(int fd, char *filename, char *cgiargs);
 void clienterror(int fd, char *cause, char *errnum, char *shortmsg,
                  char *longmsg);
+void serve_head(int fd, char *filename, int filesize);
 
 int main(int argc, char **argv) {
     int listenfd, connfd;
@@ -55,7 +56,7 @@ void doit(int fd) {
     printf("Request headers:\n");
     printf("%s", buf);
     sscanf(buf, "%s %s %s", method, uri, version);
-    if (strcasecmp(method, "GET")) {
+    if (strcasecmp(method, "GET") && strcasecmp(method, "HEAD")) {
         clienterror(fd, method, "501", "Not implemented", "Tiny dose not implement this method");
         return;
     }
@@ -65,6 +66,11 @@ void doit(int fd) {
     is_static = parse_uri(uri, filename, cgiargs);
     if (stat(filename, &sbuf) < 0) {
         clienterror(fd, filename, "404", "Not found", "Tiny couldn't find this file");
+        return;
+    }
+
+    if (strcasecmp(method, "HEAD") == 0) {
+        serve_head(fd, filename, sbuf.st_size);
         return;
     }
 
@@ -81,6 +87,19 @@ void doit(int fd) {
         }
         serve_dynamic(fd, filename, cgiargs);
     }
+}
+
+void serve_head(int fd, char *filename, int filesize) {
+    char filetype[MAXLINE], buf[MAXBUF];
+
+    /* Send response headers to client */
+    get_filetype(filename, filetype);
+    sprintf(buf, "HTTP/1.0 200 OK\r\n");
+    sprintf(buf, "%sServer: Tiny Web Server\r\n", buf);
+    sprintf(buf, "%sConnection: close\r\n", buf);
+    sprintf(buf, "%sContent-length: %d\r\n", buf, filesize);
+    sprintf(buf, "%sContent-type: %s\r\n\r\n", buf, filetype);
+    Rio_writen(fd, buf, strlen(buf));
 }
 
 void clienterror(int fd, char *cause, char *errnum, char *shortmsg, char *longmsg) {
@@ -214,4 +233,3 @@ void serve_dynamic(int fd, char *filename, char *cgiargs) {
 
     // Wait(NULL); /* Parent waits for and reaps child */
 }
-
