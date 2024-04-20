@@ -163,39 +163,37 @@ void serve_static(int fd, char *filename, int filesize) {
   Close(srcfd);
   Rio_writen(fd, srcp, filesize);
   Munmap(srcp, filesize);
-
+}
   /*
    * get_filetype - Dervive file type from filename
    */
-  void get_filetype(char *filename, char *filetype) {
-    if (strstr(filename, ".html"))
-      strcpy(filetype, "text/html");
-    else if (strstr(filename, ".gif"))
-      strcpy(filetype, "image/gif");
-    else if (strstr(filename, ".png"))
-      strcpy(filetype, "image/png");
-    else if (strstr(filename, ".jpg"))
-      strcpy(filetype, "image/jpeg");
-    else
-      strcpy(filetype, "text/plain");
+void get_filetype(char *filename, char *filetype) {
+  if (strstr(filename, ".html"))
+    strcpy(filetype, "text/html");
+  else if (strstr(filename, ".gif"))
+    strcpy(filetype, "image/gif");
+  else if (strstr(filename, ".png"))
+    strcpy(filetype, "image/png");
+  else if (strstr(filename, ".jpg"))
+    strcpy(filetype, "image/jpeg");
+  else
+    strcpy(filetype, "text/plain");
+}
+
+void serve_dynamic(int fd, char *filename, char *cgiargs) {
+  char buf[MAXLINE], *emptylist[] = { NULL };
+
+  /* Retrun first part of HTTP response */
+  sprintf(buf, "HTTP/1.0 200 OK\r\n");
+  Rio_writen(fd, buf, strlen(buf));
+  sprintf(buf, "Server: Tiny Web Server\r\n");
+  Rio_writen(fd, buf, strlen(buf));
+
+  if (Fork() == 0) { /* Child */
+    /* Real server wwould set all CGI vars here */
+    setenv("QUERY_STRING", cgiargs, 1);
+    Dup2(fd, STDOUT_FILENO);      /* Redirect stdout to client */
+    Execve(filename, emptylist, environ); /* Run CGI program */
   }
-
-  void serve_dynamic(int fd, char *filename, char *cgiargs) {
-    char buf[MAXLINE], *emptylist[] = { NULL };
-
-    /* Retrun first part of HTTP response */
-    sprintf(buf, "HTTP/1.0 200 OK\r\n");
-    Rio_writen(fd, buf, strlen(buf));
-    sprintf(buf, "Server: Tiny Web Server\r\n");
-    Rio_writen(fd, buf, strlen(buf));
-
-    if (Fork() == 0) { /* Child */
-      /* Real server wwould set all CGI vars here */
-      setenv("QUERY_STRING", cgiargs, 1);
-      Dup2(fd, STDOUT_FILENO);      /* Redirect stdout to client */
-      Execve(filename, emptylist, environ); /* Run CGI program */
-    }
-    Wait(NULL); /* Parent waits for and reaps child */
-  }
-
+  Wait(NULL); /* Parent waits for and reaps child */
 }
