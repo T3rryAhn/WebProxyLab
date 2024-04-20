@@ -70,7 +70,7 @@ void doit(int fd) {
 
     if (is_static) { /* Serve static content */
         if (!(S_ISREG(sbuf.st_mode)) || !(S_IRUSR & sbuf.st_mode)) {
-            cleinterror(fd, filename, "403", "Forbidden", "Tiny couldn't read the file");
+            clienterror(fd, filename, "403", "Forbidden", "Tiny couldn't read the file");
             return;
         }
         serve_static(fd, filename, sbuf.st_size);
@@ -88,11 +88,7 @@ void clienterror(int fd, char *cause, char *errnum, char *shortmsg, char *longms
 
     /* Build the HTTP response body */
     sprintf(body, "<html><title>Tiny Error</title>");
-    sprintf(body,
-            "%s<body bgcolor="
-            "ffffff"
-            ">\r\n",
-            body);
+    sprintf(body, "%s<body bgcolor=""ffffff"">\r\n", body);
     sprintf(body, "%s%s: %s\r\n", body, errnum, shortmsg);
     sprintf(body, "%s<p>%s: %s\r\n", body, longmsg, cause);
     sprintf(body, "%s<hr><em>The Tiny Web server</em>\r\n", body);
@@ -152,7 +148,7 @@ void serve_static(int fd, char *filename, int filesize) {
   sprintf(buf, "%sServer: Tiny Web Server\r\n", buf);
   sprintf(buf, "%sConnection: close\r\n", buf);
   sprintf(buf, "%sContent-length: %d\r\n", buf, filesize);
-  sprintf(buf, "%sContent-type: %d\r\n", buf, filesize);
+  sprintf(buf, "%sContent-type: %d\r\n\r\n", buf, filesize);
   Rio_writen(fd, buf, strlen(buf));
   printf("Response headers:\n");
   printf("%s", buf);
