@@ -151,7 +151,7 @@ void serve_static(int fd, char *filename, int filesize) {
     sprintf(buf, "%sServer: Tiny Web Server\r\n", buf);
     sprintf(buf, "%sConnection: close\r\n", buf);
     sprintf(buf, "%sContent-length: %d\r\n", buf, filesize);
-    sprintf(buf, "%sContent-type: %d\r\n", buf, filesize);
+    sprintf(buf, "%sContent-type: %d\r\n\r\n", buf, filesize);
     Rio_writen(fd, buf, strlen(buf));
     printf("Response headers:\n");
     printf("%s", buf);
