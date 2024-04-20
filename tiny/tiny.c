@@ -70,7 +70,7 @@ void doit(int fd) {
 
     if (is_static) { /* Serve static content */
         if (!(S_ISREG(sbuf.st_mode)) || !(S_IRUSR & sbuf.st_mode)) {
-            cleinterror(fd, filename, "403", "Forbidden", "Tiny couldn't read the file");
+            clienterror(fd, filename, "403", "Forbidden", "Tiny couldn't read the file");
             return;
         }
         serve_static(fd, filename, sbuf.st_size);
@@ -131,11 +131,10 @@ int parse_uri(char *uri, char *filename, char *cgiargs) {
     } else { /* Dynamic content */
         ptr = index(uri, '?');
         if (ptr) {
-          strcpy(cgiargs, ptr+1);
-          *ptr = '\0';
-        }
-        else
-          strcpy(cgiargs, "");
+            strcpy(cgiargs, ptr + 1);
+            *ptr = '\0';
+        } else
+            strcpy(cgiargs, "");
         strcpy(filename, ".");
         strcat(filename, uri);
         return 0;
@@ -143,57 +142,58 @@ int parse_uri(char *uri, char *filename, char *cgiargs) {
 }
 
 void serve_static(int fd, char *filename, int filesize) {
-  int srcfd;
-  char *srcp, filetype[MAXLINE], buf[MAXBUF];
+    int srcfd;
+    char *srcp, filetype[MAXLINE], buf[MAXBUF];
 
-  /* Send response headers to client */
-  get_filetype(filename, filetype);
-  sprintf(buf, "HTTP/1.0 200 OK\r\n");
-  sprintf(buf, "%sServer: Tiny Web Server\r\n", buf);
-  sprintf(buf, "%sConnection: close\r\n", buf);
-  sprintf(buf, "%sContent-length: %d\r\n", buf, filesize);
-  sprintf(buf, "%sContent-type: %d\r\n", buf, filesize);
-  Rio_writen(fd, buf, strlen(buf));
-  printf("Response headers:\n");
-  printf("%s", buf);
+    /* Send response headers to client */
+    get_filetype(filename, filetype);
+    sprintf(buf, "HTTP/1.0 200 OK\r\n");
+    sprintf(buf, "%sServer: Tiny Web Server\r\n", buf);
+    sprintf(buf, "%sConnection: close\r\n", buf);
+    sprintf(buf, "%sContent-length: %d\r\n", buf, filesize);
+    sprintf(buf, "%sContent-type: %d\r\n", buf, filesize);
+    Rio_writen(fd, buf, strlen(buf));
+    printf("Response headers:\n");
+    printf("%s", buf);
 
-  /* Send response body to client */
-  srcfd = Open(filename, O_RDONLY, 0);
-  srcp = Mmap(0, filesize, PROT_READ, MAP_PRIVATE, srcfd, 0);
-  Close(srcfd);
-  Rio_writen(fd, srcp, filesize);
-  Munmap(srcp, filesize);
+    /* Send response body to client */
+    srcfd = Open(filename, O_RDONLY, 0);
+    srcp = Mmap(0, filesize, PROT_READ, MAP_PRIVATE, srcfd, 0);
+    Close(srcfd);
+    Rio_writen(fd, srcp, filesize);
+    Munmap(srcp, filesize);
+}
 
-  /*
-   * get_filetype - Dervive file type from filename
-   */
-  void get_filetype(char *filename, char *filetype) {
+/*
+ * get_filetype - Dervive file type from filename
+ */
+void get_filetype(char *filename, char *filetype) {
     if (strstr(filename, ".html"))
-      strcpy(filetype, "text/html");
+        strcpy(filetype, "text/html");
     else if (strstr(filename, ".gif"))
-      strcpy(filetype, "image/gif");
+        strcpy(filetype, "image/gif");
     else if (strstr(filename, ".png"))
-      strcpy(filetype, "image/png");
+        strcpy(filetype, "image/png");
     else if (strstr(filename, ".jpg"))
-      strcpy(filetype, "image/jpeg");
+        strcpy(filetype, "image/jpeg");
     else
-      strcpy(filetype, "text/plain");
-  }
+        strcpy(filetype, "text/plain");
+}
 
-  void handler(int sig) {
-    int olderno = errno;
+void handler(int sig) {
+    int olderrno = errno;
 
-    while(waitpid(-1, NULL, 0) > 0) {
-      Sio_puts("Handler reaped child\n");
+    while (waitpid(-1, NULL, 0) > 0) {
+        Sio_puts("Handler reaped child\n");
     }
-    if (errono != ECHILD)
-      Sio_error("waitpid error");
+    if (errno != ECHILD)
+        Sio_error("waitpid error");
     Sleep(1);
     errno = olderrno;
-  }
+}
 
-  void serve_dynamic(int fd, char *filename, char *cgiargs) {
-    char buf[MAXLINE], *emptylist[] = { NULL };
+void serve_dynamic(int fd, char *filename, char *cgiargs) {
+    char buf[MAXLINE], *emptylist[] = {NULL};
 
     /* Retrun first part of HTTP response */
     sprintf(buf, "HTTP/1.0 200 OK\r\n");
@@ -201,15 +201,14 @@ void serve_static(int fd, char *filename, int filesize) {
     sprintf(buf, "Server: Tiny Web Server\r\n");
     Rio_writen(fd, buf, strlen(buf));
 
+    Sleep(5);
     if (Fork() == 0) { /* Child */
-      /* Real server wwould set all CGI vars here */
-      setenv("QUERY_STRING", cgiargs, 1);
-      Dup2(fd, STDOUT_FILENO);      /* Redirect stdout to client */
-      Execve(filename, emptylist, environ); /* Run CGI program */
+        /* Real server wwould set all CGI vars here */
+        setenv("QUERY_STRING", cgiargs, 1);
+        Dup2(fd, STDOUT_FILENO);              /* Redirect stdout to client */
+        Execve(filename, emptylist, environ); /* Run CGI program */
     }
 
-    
     // Wait(NULL); /* Parent waits for and reaps child */
-  }
-
 }
+
