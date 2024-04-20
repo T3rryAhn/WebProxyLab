@@ -201,7 +201,6 @@ void serve_dynamic(int fd, char *filename, char *cgiargs) {
     sprintf(buf, "Server: Tiny Web Server\r\n");
     Rio_writen(fd, buf, strlen(buf));
 
-    Sleep(5);
     if (Fork() == 0) { /* Child */
         /* Real server wwould set all CGI vars here */
         setenv("QUERY_STRING", cgiargs, 1);
