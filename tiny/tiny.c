@@ -52,10 +52,13 @@ void doit(int fd) {
     int is_head = 0;
 
     /* Read request line and headers */
+    int n = 0;
     Rio_readinitb(&rio, fd);
-    Rio_readlineb(&rio, buf, MAXLINE);
+    n = Rio_readlineb(&rio, buf, MAXLINE);
     printf("Request headers:\n");
     printf("%s", buf);
+    printf("server received %d bytes\n", (int)n);
+
     sscanf(buf, "%s %s %s", method, uri, version);
     if (strcasecmp(method, "GET") && strcasecmp(method, "HEAD")) {
         clienterror(fd, method, "501", "Not implemented", "Tiny dose not implement this method");
