@@ -225,6 +225,5 @@ void serve_dynamic(int fd, char *filename, char *cgiargs, int is_head) {
         Dup2(fd, STDOUT_FILENO);              /* Redirect stdout to client */
         Execve(filename, emptylist, environ); /* Run CGI program */
     }
-
     // Wait(NULL); /* Parent waits for and reaps child */
 }
