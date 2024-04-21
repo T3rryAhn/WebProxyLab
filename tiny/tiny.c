@@ -68,13 +68,18 @@ void doit(int fd) {
 
     read_requesthdrs(&rio);
 
+    /* Check if the request is for favicon.ico and ignore it */
+    if (strstr(uri, "favicon.ico")) {
+        printf("Ignoring favicon.ico request\n");
+        return;  // Just return without sending any response
+    }
+
     /* Parse URI from GET request */
     is_static = parse_uri(uri, filename, cgiargs);
     if (stat(filename, &sbuf) < 0) {
         clienterror(fd, filename, "404", "Not found", "Tiny couldn't find this file");
         return;
     }
-
 
     if (is_static) { /* Serve static content */
         if (!(S_ISREG(sbuf.st_mode)) || !(S_IRUSR & sbuf.st_mode)) {
