@@ -8,6 +8,7 @@ int main(void) {
   char *buf, *p;
   char arg1[MAXLINE], arg2[MAXLINE], content[MAXLINE];
   int n1 = 0, n2 = 0;
+  char *is_head_request = getenv("IS_HEAD_REQUEST");
 
   if ((buf = getenv("QUERY_STRING")) != NULL) {
     p = strchr(buf, '&');
@@ -27,7 +28,10 @@ int main(void) {
   printf("Connection: close\r\n");
   printf("content-length: %d\r\n", (int)strlen(content));
   printf("content-type: text/html\r\n\r\n");
-  printf("%s", content);
+
+  if (is_head_request == NULL || strcmp(is_head_request, "1") != 0) {
+    printf("%s", content);
+  }
   fflush(stdout);
 
 
