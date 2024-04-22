@@ -73,7 +73,7 @@ int doit(int fd) {
     }
 
     // Connect to the target server
-    printf("Connect to {hostname : %s, port : %s}\n", hostname, port);
+    printf("Connect to {hostname : %s, port : %s, path : %s}\n", hostname, port, path);
     serverfd = Open_clientfd(hostname, port);
 
     if (serverfd < 0) {
@@ -153,7 +153,7 @@ int parse_uri(char *uri, char *hostname, char *port, char *pathname) {
     if (*start == '/') {
       sscanf(start, "%s", pathname);
     } else {
-      strcpy(pathname, "/");
+      return -1;
     }
 
     return 1;
