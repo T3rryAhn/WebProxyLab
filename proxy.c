@@ -75,7 +75,7 @@ int doit(int fd) {
     
 
     // Connect to the target server
-    printf("hostname : %s, port : %s\n", hostname, port);
+    printf("Connect to {hostname : %s, port : %s}\n", hostname, port);
     serverfd = Open_clientfd(hostname, port);
 
     if (serverfd < 0) {
