@@ -55,7 +55,6 @@ int doit(int fd) {
         return;
 
     sscanf(buf, "%s %s %s", method, uri, version);  // Parse request line
-    printf("real uri : %s\n", uri);
     if (strcasecmp(method, "GET") && strcasecmp(method, "HEAD")) {
         clienterror(fd, method, "501", "Not Implemented", "Proxy does not implement this method");
         return;
