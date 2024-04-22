@@ -101,11 +101,13 @@ int doit(int fd) {
 void forward_request(int clientfd, int serverfd) {
     char buf[MAXLINE];
     ssize_t n;
-
+    ssize_t received_size = 0;
     while ((n = Rio_readn(serverfd, buf, MAXLINE)) > 0) {
-        printf("Proxy received %zd bytes, now sending...\n", n);
+        // printf("Proxy received %zd bytes, now sending...\n", n);
+        received_size += n;
         Rio_writen(clientfd, buf, n);
     }
+    printf("Proxy received %zd bytes, now sending...\n", received_size);
 }
 
 // parse uri
