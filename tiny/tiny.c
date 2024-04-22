@@ -73,7 +73,7 @@ void doit(int fd) {
 
     /* Check if the request is for favicon.ico and ignore it */
     if (strstr(uri, "favicon.ico")) {
-        printf("Ignoring favicon.ico request\n");
+        printf("Ignoring favicon.ico request\r\n");
         return;  // Just return without sending any response
     }
 
