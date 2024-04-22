@@ -10,7 +10,7 @@
 int doit(int fd);
 void forward_request(int clientfd, int serverfd);
 void clienterror(int fd, char *cause, char *errnum, char *shortmsg, char *longmsg);
-int parse_uri(char *uri, char *hostname, char *pathname, char *port);
+int parse_uri(char *uri, char *hostname, char *port, char *path);
 
 /* You won't lose style points for including this long line in your code */
 static const char *user_agent_hdr =
@@ -45,7 +45,7 @@ int main(int argc, char **argv) {
 
 int doit(int fd) {
     char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE];
-    char hostname[MAXLINE], pathname[MAXLINE], port[MAXLINE];
+    char hostname[MAXLINE], path[MAXLINE], port[MAXLINE];
     rio_t rio, server_rio;
     int serverfd;
 
@@ -55,14 +55,14 @@ int doit(int fd) {
         return;
 
     sscanf(buf, "%s %s %s", method, uri, version);  // Parse request line
-
+    printf("real uri : %s\n", uri);
     if (strcasecmp(method, "GET") && strcasecmp(method, "HEAD")) {
         clienterror(fd, method, "501", "Not Implemented", "Proxy does not implement this method");
         return;
     }
 
     // Parse URI from GET request
-    if (!parse_uri(uri, hostname, pathname, port)) {
+    if (!parse_uri(uri, hostname, port, path)) {
         clienterror(fd, uri, "400", "Bad Request", "Proxy received a malformed request");
         return;
     }
@@ -72,7 +72,6 @@ int doit(int fd) {
         printf("Ignoring favicon.ico request\n");
         return;  // Just return without sending any response
     }
-    
 
     // Connect to the target server
     printf("Connect to {hostname : %s, port : %s}\n", hostname, port);
@@ -80,11 +79,12 @@ int doit(int fd) {
 
     if (serverfd < 0) {
         fprintf(stderr, "Connection to %s on port %s failed.\n", hostname, port);
+        clienterror(fd, "Connection Failed", "5-3", "Service Unavailable", "The proxy server could not retrieve the resource.");
         return;
     }
 
     // Write the HTTP headers to the server
-    sprintf(buf, "GET %s HTTP/1.0\r\n", pathname);
+    sprintf(buf, "GET %s HTTP/1.0\r\n", path);
     sprintf(buf, "%sHost: %s\r\n", buf, hostname);
     sprintf(buf, "%s%s\r\n", buf, user_agent_hdr);
     sprintf(buf, "%sConnection: close\r\n", buf);
@@ -110,7 +110,7 @@ void forward_request(int clientfd, int serverfd) {
 }
 
 // parse uri
-int parse_uri(char *uri, char *hostname, char *pathname, char *port) {
+int parse_uri(char *uri, char *hostname, char *port, char *pathname) {
     char *pos;
     char *start;
 
