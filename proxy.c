@@ -11,6 +11,7 @@ int doit(int fd);
 void forward_request(int clientfd, int serverfd);
 void clienterror(int fd, char *cause, char *errnum, char *shortmsg, char *longmsg);
 int parse_uri(char *uri, char *hostname, char *port, char *path);
+void *thread(void *vargp);
 
 /* You won't lose style points for including this long line in your code */
 static const char *user_agent_hdr =
@@ -18,29 +19,42 @@ static const char *user_agent_hdr =
     "Firefox/10.0.3\r\n";
 
 int main(int argc, char **argv) {
-    int listenfd, connfd;                                 // listenfd는 리스팅 소켓의 fd, connfd는 연결 소켓의 fd
+    int listenfd, *connfdp;                                 // listenfd는 리스팅 소켓의 fd, connfd는 연결 소켓의 fd
     socklen_t clientlen;                                  // clientlen은 클라이언트 주소 구조체의 크기를 저장. Accept 함수에서 사용
     struct sockaddr_storage clientaddr;                   // client 주소 정보를 저장하기 위한 큰 구조체. ipv4 와 ipv6 모두 지원
     char client_hostname[MAXLINE], client_port[MAXLINE];  // 클라이언트의 호스트 이름과 포트 번호를 저장하는 배열
+    pthread_t tid;
 
     if (argc != 2) {
         fprintf(stderr, "usage: %s <port>\n", argv[0]);
         exit(0);
     }
 
+    signal(SIGPIPE, SIG_IGN);
+
     listenfd = Open_listenfd(argv[1]);                                    // 지정된 포트로 리스닝 소켓을 열고, 해당 소켓의 fd를 listenfd에 저장
     while (1) {                                                           // 무한 루프를 시작합니다. 서버는 계속해서 클라이언트의 연결 요청을 기다립니다.
         clientlen = sizeof(struct sockaddr_storage);                      // 클라이언트 주소 구조체의 크기를 clientlen에 저장합니다.
-        connfd = Accept(listenfd, (SA *)&clientaddr, &clientlen);         // 클라이언트의 연결 요청을 수락합니다. 수락된 연결의 소켓 디스크립터를 connfd에 저장합니다.
+        connfdp = Malloc(sizeof(int));
+        *connfdp = Accept(listenfd, (SA *)&clientaddr, &clientlen);         // 클라이언트의 연결 요청을 수락합니다. 수락된 연결의 소켓 디스크립터를 connfd에 저장합니다.
         Getnameinfo((SA *)&clientaddr, clientlen,                         // 클라이언트의 주소 정보를 사용하여,
                     client_hostname, MAXLINE,                             // 호스트 이름과
                     client_port, MAXLINE, 0);                             // 포트 번호를 문자열로 변환합니다.
         printf("Connected to (%s, %s)\n", client_hostname, client_port);  // 클라이언트의 호스트 이름과 포트 번호를 출력합니다.
         printf("%s\n", user_agent_hdr);
-        doit(connfd);
-        Close(connfd);  // 연결 소켓을 닫습니다.
+        Pthread_create(&tid, NULL, thread, connfdp);
     }
     return 0;  // 메인 함수 종료
+}
+
+// Thread routine
+void *thread(void *vargp) {
+    int connfd = *((int *)vargp);
+    Pthread_detach(pthread_self());
+    Free(vargp);
+    doit(connfd);
+    Close(connfd);
+    return NULL;
 }
 
 int doit(int fd) {
@@ -87,7 +101,7 @@ int doit(int fd) {
     sprintf(buf, "%sHost: %s\r\n", buf, hostname);
     sprintf(buf, "%s%s\r\n", buf, user_agent_hdr);
     sprintf(buf, "%sConnection: close\r\n", buf);
-    Rio_writen(serverfd, buf, strlen(buf));
+    rio_writen(serverfd, buf, strlen(buf));
 
     // Transfer the response back to the client
     Rio_readinitb(&server_rio, serverfd);
@@ -105,7 +119,7 @@ void forward_request(int clientfd, int serverfd) {
     while ((n = Rio_readn(serverfd, buf, MAXLINE)) > 0) {
         // printf("Proxy received %zd bytes, now sending...\n", n);
         received_size += n;
-        Rio_writen(clientfd, buf, n);
+        rio_writen(clientfd, buf, n);
     }
     printf("Proxy received %zd bytes, now sending...\n", received_size);
 }
@@ -175,10 +189,10 @@ void clienterror(int fd, char *cause, char *errnum, char *shortmsg, char *longms
 
     /* Print the HTTP response */
     sprintf(buf, "HTTP/1.0 %s %s\r\n", errnum, shortmsg);
-    Rio_writen(fd, buf, strlen(buf));
+    rio_writen(fd, buf, strlen(buf));
     sprintf(buf, "Content-type: text/html\r\n");
-    Rio_writen(fd, buf, strlen(buf));
+    rio_writen(fd, buf, strlen(buf));
     sprintf(buf, "Content-length: %d\r\n\r\n", (int)strlen(body));
-    Rio_writen(fd, buf, strlen(buf));
-    Rio_writen(fd, body, strlen(body));
+    rio_writen(fd, buf, strlen(buf));
+    rio_writen(fd, body, strlen(body));
 }
