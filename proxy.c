@@ -2,7 +2,7 @@
 
 #include "csapp.h"  // 기본적인 시스템 호출 및 소켓 관련 함수들
 
-/* Recommended max cache and object sizes */
+/* 최대 캐시 및 객체 크기 정의 */
 #define MAX_CACHE_SIZE 1049000
 #define MAX_OBJECT_SIZE 102400
 
@@ -38,7 +38,7 @@ int main(int argc, char **argv) {
         printf("Connected to (%s, %s)\n", client_hostname, client_port);  // 클라이언트의 호스트 이름과 포트 번호를 출력합니다.
         printf("%s\n", user_agent_hdr);
         doit(connfd);
-        Close(connfd);  // 연결 소켓을 닫습니다. 실제 프록시 서버에서는 여기서 추가 작업(데이터 전송 등)이 이루어진 후 연결을 종료합니다.
+        Close(connfd);  // 연결 소켓을 닫습니다.
     }
     return 0;  // 메인 함수 종료
 }
@@ -50,11 +50,11 @@ int doit(int fd) {
     int serverfd;
 
     // Read request line and headers
-    Rio_readinitb(&rio, fd);
-    if (!Rio_readlineb(&rio, buf, MAXLINE))  // Read the request line
+    Rio_readinitb(&rio, fd);                 // rio 구조체 초기화 및 fd와 연결
+    if (!Rio_readlineb(&rio, buf, MAXLINE))  // 클라이언트로 부터 요청라인 첫줄 읽기
         return;
 
-    sscanf(buf, "%s %s %s", method, uri, version);  // Parse request line
+    sscanf(buf, "%s %s %s", method, uri, version);  // 요청 라인 파싱하여 메소드 uri, 버전 정보 추출
     if (strcasecmp(method, "GET") && strcasecmp(method, "HEAD")) {
         clienterror(fd, method, "501", "Not Implemented", "Proxy does not implement this method");
         return;
@@ -74,11 +74,11 @@ int doit(int fd) {
 
     // Connect to the target server
     printf("Connect to {hostname : %s, port : %s, path : %s}\n", hostname, port, path);
-    serverfd = Open_clientfd(hostname, port);
+    serverfd = Open_clientfd(hostname, port);               // 대상 서버에 연결
 
     if (serverfd < 0) {
         fprintf(stderr, "Connection to %s on port %s failed.\n", hostname, port);
-        clienterror(fd, "Connection Failed", "5-3", "Service Unavailable", "The proxy server could not retrieve the resource.");
+        clienterror(fd, "Connection Failed", "503", "Service Unavailable", "The proxy server could not retrieve the resource.");
         return;
     }
 
