@@ -68,16 +68,16 @@ int doit(int fd) {
 
     /* Check if the request is for favicon.ico and ignore it */
     if (strstr(uri, "favicon.ico")) {
-        printf("Ignoring favicon.ico request\n");
+        printf("Ignoring favicon.ico request\n\n");
         return;  // Just return without sending any response
     }
 
     // Connect to the target server
     printf("Connect to {hostname : %s, port : %s, path : %s}\n", hostname, port, path);
-    serverfd = Open_clientfd(hostname, port);               // 대상 서버에 연결
+    serverfd = open_clientfd(hostname, port);               // 대상 서버에 연결
 
     if (serverfd < 0) {
-        fprintf(stderr, "Connection to %s on port %s failed.\n", hostname, port);
+        fprintf(stderr, "Connection to %s on port %s failed.\n\n", hostname, port);
         clienterror(fd, "Connection Failed", "503", "Service Unavailable", "The proxy server could not retrieve the resource.");
         return;
     }
