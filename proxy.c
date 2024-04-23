@@ -8,10 +8,10 @@
 
 // function prototype
 int doit(int fd);
-void forward_request(int clientfd, int serverfd);
-void clienterror(int fd, char *cause, char *errnum, char *shortmsg, char *longmsg);
-int parse_uri(char *uri, char *hostname, char *port, char *path);
 void *thread(void *vargp);
+void forward_request(int clientfd, int serverfd);
+int parse_uri(char *uri, char *hostname, char *port, char *path);
+void clienterror(int fd, char *cause, char *errnum, char *shortmsg, char *longmsg);
 
 /* You won't lose style points for including this long line in your code */
 static const char *user_agent_hdr =
@@ -19,7 +19,7 @@ static const char *user_agent_hdr =
     "Firefox/10.0.3\r\n";
 
 int main(int argc, char **argv) {
-    int listenfd, *connfdp;                                 // listenfd는 리스팅 소켓의 fd, connfd는 연결 소켓의 fd
+    int listenfd, *connfdp;                               // listenfd는 리스팅 소켓의 fd, connfd는 연결 소켓의 fd
     socklen_t clientlen;                                  // clientlen은 클라이언트 주소 구조체의 크기를 저장. Accept 함수에서 사용
     struct sockaddr_storage clientaddr;                   // client 주소 정보를 저장하기 위한 큰 구조체. ipv4 와 ipv6 모두 지원
     char client_hostname[MAXLINE], client_port[MAXLINE];  // 클라이언트의 호스트 이름과 포트 번호를 저장하는 배열
@@ -30,16 +30,16 @@ int main(int argc, char **argv) {
         exit(0);
     }
 
-    signal(SIGPIPE, SIG_IGN);                               // SIGPIPE 시그널을 무시한다. (연결이 끊긴 파일디스크립터에 write를 하려고할때 생기는 시그널)
+    signal(SIGPIPE, SIG_IGN);  // SIGPIPE 시그널을 무시한다. (연결이 끊긴 파일디스크립터에 write를 하려고할때 생기는 시그널)
 
-    listenfd = Open_listenfd(argv[1]);                                    // 지정된 포트로 리스닝 소켓을 열고, 해당 소켓의 fd를 listenfd에 저장
-    while (1) {                                                           // 무한 루프를 시작합니다. 서버는 계속해서 클라이언트의 연결 요청을 기다립니다.
-        clientlen = sizeof(struct sockaddr_storage);                      // 클라이언트 주소 구조체의 크기를 clientlen에 저장합니다.
-        connfdp = Malloc(sizeof(int));                                      // 쓰레드 할당문이 accept 후에 완료된다면, 쓰레드의 지역 connfd 변수가 달라질수있어서 말록으로 저장한다.
-        *connfdp = Accept(listenfd, (SA *)&clientaddr, &clientlen);         // 클라이언트의 연결 요청을 수락합니다. 수락된 연결의 소켓 디스크립터를 connfd에 저장합니다.
-        Getnameinfo((SA *)&clientaddr, clientlen,                         // 클라이언트의 주소 정보를 사용하여,
-                    client_hostname, MAXLINE,                             // 호스트 이름과
-                    client_port, MAXLINE, 0);                             // 포트 번호를 문자열로 변환합니다.
+    listenfd = Open_listenfd(argv[1]);                               // 지정된 포트로 리스닝 소켓을 열고, 해당 소켓의 fd를 listenfd에 저장
+    while (1) {                                                      // 무한 루프를 시작합니다. 서버는 계속해서 클라이언트의 연결 요청을 기다립니다.
+        clientlen = sizeof(struct sockaddr_storage);                 // 클라이언트 주소 구조체의 크기를 clientlen에 저장합니다.
+        connfdp = Malloc(sizeof(int));                               // 쓰레드 할당문이 accept 후에 완료된다면, 쓰레드의 지역 connfd 변수가 달라질수있어서 말록으로 저장한다.
+        *connfdp = Accept(listenfd, (SA *)&clientaddr, &clientlen);  // 클라이언트의 연결 요청을 수락합니다. 수락된 연결의 소켓 디스크립터를 connfd에 저장합니다.
+        Getnameinfo((SA *)&clientaddr, clientlen,                    // 클라이언트의 주소 정보를 사용하여,
+                    client_hostname, MAXLINE,                        // 호스트 이름과
+                    client_port, MAXLINE, 0);                        // 포트 번호를 문자열로 변환합니다.
         printf("\n######### New Connection #########\n");
         printf("Connected to (%s, %s)\n", client_hostname, client_port);  // 클라이언트의 호스트 이름과 포트 번호를 출력합니다.
         printf("%s\n", user_agent_hdr);
@@ -69,6 +69,8 @@ int doit(int fd) {
     if (!Rio_readlineb(&rio, buf, MAXLINE))  // 클라이언트로 부터 요청라인 첫줄 읽기
         return;
 
+    printf("Request: %s\n", buf);
+
     sscanf(buf, "%s %s %s", method, uri, version);  // 요청 라인 파싱하여 메소드 uri, 버전 정보 추출
     if (strcasecmp(method, "GET") && strcasecmp(method, "HEAD")) {
         clienterror(fd, method, "501", "Not Implemented", "Proxy does not implement this method");
@@ -88,8 +90,8 @@ int doit(int fd) {
     }
 
     // Connect to the target server
-    printf("Connect to {hostname : %s, port : %s, path : %s}\n", hostname, port, path);
-    serverfd = open_clientfd(hostname, port);               // 대상 서버에 연결
+    printf("Connect to {method: %s, hostname: %s, port: %s, path: %s}\n", method, hostname, port, path);
+    serverfd = open_clientfd(hostname, port);  // 대상 서버에 연결
 
     if (serverfd < 0) {
         fprintf(stderr, "Connection to %s on port %s failed.\n\n", hostname, port);
@@ -122,7 +124,7 @@ void forward_request(int clientfd, int serverfd) {
         received_size += n;
         rio_writen(clientfd, buf, n);
     }
-    printf("Proxy received %zd bytes, now sending...\n", received_size);
+    printf("Proxy received %zd bytes, and sended to client\n", received_size);
 }
 
 // parse uri
@@ -135,20 +137,20 @@ int parse_uri(char *uri, char *hostname, char *port, char *pathname) {
     // skip protocol (http:// or https://)
     start = strstr(uri, "://");
     if (start != NULL) {
-      start += 3;
+        start += 3;
     } else {
-      start = uri;
+        start = uri;
     }
 
     // find port num pos
     pos = strchr(start, ':');
     if (pos != NULL) {
-      *pos = '\0';
-      sscanf(start, "%s", hostname);
-      sscanf(pos + 1, "%[^/]", port);
-      start = pos + strlen(port) + 1;
+        *pos = '\0';
+        sscanf(start, "%s", hostname);
+        sscanf(pos + 1, "%[^/]", port);
+        start = pos + strlen(port) + 1;
     } else {
-      // 포트가 명시되지 않았다면 기본 포트를 사용.
+        // 포트가 명시되지 않았다면 기본 포트를 사용.
         pos = strchr(start, '/');
         if (pos != NULL) {
             *pos = '\0';
@@ -166,9 +168,9 @@ int parse_uri(char *uri, char *hostname, char *port, char *pathname) {
 
     // 경로 추출
     if (*start == '/') {
-      sscanf(start, "%s", pathname);
+        sscanf(start, "%s", pathname);
     } else {
-      return -1;
+        return -1;
     }
 
     return 1;
