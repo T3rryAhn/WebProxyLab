@@ -35,11 +35,12 @@ int main(int argc, char **argv) {
     listenfd = Open_listenfd(argv[1]);                                    // 지정된 포트로 리스닝 소켓을 열고, 해당 소켓의 fd를 listenfd에 저장
     while (1) {                                                           // 무한 루프를 시작합니다. 서버는 계속해서 클라이언트의 연결 요청을 기다립니다.
         clientlen = sizeof(struct sockaddr_storage);                      // 클라이언트 주소 구조체의 크기를 clientlen에 저장합니다.
-        connfdp = Malloc(sizeof(int));
+        connfdp = Malloc(sizeof(int));                                      // 쓰레드 할당문이 accept 후에 완료된다면, 쓰레드의 지역 connfd 변수가 달라질수있어서 말록으로 저장한다.
         *connfdp = Accept(listenfd, (SA *)&clientaddr, &clientlen);         // 클라이언트의 연결 요청을 수락합니다. 수락된 연결의 소켓 디스크립터를 connfd에 저장합니다.
         Getnameinfo((SA *)&clientaddr, clientlen,                         // 클라이언트의 주소 정보를 사용하여,
                     client_hostname, MAXLINE,                             // 호스트 이름과
                     client_port, MAXLINE, 0);                             // 포트 번호를 문자열로 변환합니다.
+        printf("\n######### New Connection #########\n");
         printf("Connected to (%s, %s)\n", client_hostname, client_port);  // 클라이언트의 호스트 이름과 포트 번호를 출력합니다.
         printf("%s\n", user_agent_hdr);
         Pthread_create(&tid, NULL, thread, connfdp);
