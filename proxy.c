@@ -24,7 +24,7 @@ typedef struct {
 
 // 캐시 선언
 Cache cache;
-int capacity = 1000;    // 캐시에 저장될 객체 수. 검색시간관련?
+int capacity = 10000;    // 캐시에 저장될 객체 수. 검색시간이 너무 늘어나지않게 혹은 캐시 삭제 확인해보기 위해 추가함.
 
 // function prototype
 int doit(int fd);
@@ -299,7 +299,7 @@ void cache_evict(Cache *cache) {
     cache->entries[oldest_index] = cache->entries[cache->count - 1];  // 방금 free한 빈공간에 맨뒤 말록을 끼워넣기 위해.
     cache->count--;
 
-    printf("cache deleted %s bytes\n", cache->entries[oldest_index].size);
+    printf("cache deleted\n");
 }
 
 // 데이터를 캐시에 추가
@@ -310,7 +310,8 @@ void cache_add(Cache *cache, char *request, char *response, size_t size) {
         cache_evict(cache);
     }
     cache->entries[cache->count].request = strdup(request);    // 요청 캐시 본체가 실질적으로 저장되는 함수. strdup 문자열 복사본을 동적으로 할당후 주소 반환.
-    cache->entries[cache->count].response = strdup(response);  // 응답 캐시 본체가 ""
+    cache->entries[cache->count].response = Malloc(size);  // 응답을 위한 메모리 할당.
+    memcpy(cache->entries[cache->count].response, response, size);  // 응답 복사
     cache->entries[cache->count].size = size;
     cache->entries[cache->count].timestamp = time(NULL);
     cache->current_size += size;
