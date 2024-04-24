@@ -123,11 +123,13 @@ int doit(int fd) {
 
     // 캐시 검색
     int cache_index = cache_find(&cache, buf);
-    if (cache_index != -1) {  // 캐시 히트
+    if (cache_index != -1) {  
+        // 캐시 히트 했다면 캐시 전달.
         printf("Cache hit. Retrieving from cache...\n");
         char cached_response[MAX_OBJECT_SIZE];
-        cache_retrieve(&cache, cache_index, cached_response, sizeof(cached_response));
-        rio_writen(fd, cached_response, strlen(cached_response));
+        size_t response_size = cache.entries[cache_index].size;
+        cache_retrieve(&cache, cache_index, cached_response, response_size);
+        rio_writen(fd, cached_response, response_size);
         return;
     }
     // 없다면(캐시 미스) 아래 실행
@@ -332,9 +334,7 @@ void cache_add(Cache *cache, char *request, char *response, size_t size) {
 void cache_retrieve(Cache *cache, int index, char *buf, size_t buf_size) {
     pthread_mutex_lock(&cache->lock);
     if (index >= 0 && index < cache->count) {
-        // 버퍼 크기와 캐시된 응답 크기 중 작은 것을 선택하여 복사
-        size_t copy_size = (buf_size < cache->entries[index].size) ? buf_size : cache->entries[index].size;
-        memcpy(buf, cache->entries[index].response, copy_size);  // memcpy로 이진 데이터 안전 복사
+        memcpy(buf, cache->entries[index].response, buf_size);  // memcpy로 이진 데이터 안전 복사
     }
     pthread_mutex_unlock(&cache->lock);
 }
