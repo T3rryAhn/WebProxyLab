@@ -59,7 +59,7 @@ int main(int argc, char **argv) {
     }
 
     cache_init(&cache, capacity);  // 캐시 초기화
-    signal(SIGPIPE, SIG_IGN);      // SIGPIPE 시그널을 무시한다. (연결이 끊긴 파일디스크립터에 write를 하려고할때 생기는 시그널)
+    signal(SIGPIPE, SIG_IGN);      // SIGPIPE 시그널을 무시한다. (연결이 끊긴 파일디스크립터에 write를 하려고할때 생기는 시그널) 서버 안죽게 할려고 추가함. 프록시가 서버에 요청을 받고 쓰려는 사이 유저가 프록시와 연결을 끊을 경우
 
     listenfd = Open_listenfd(argv[1]);                               // 지정된 포트로 리스닝 소켓을 열고, 해당 소켓의 fd를 listenfd에 저장
     while (1) {                                                      // 무한 루프를 시작합니다. 서버는 계속해서 클라이언트의 연결 요청을 기다립니다.
