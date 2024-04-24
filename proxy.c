@@ -6,6 +6,23 @@
 #define MAX_CACHE_SIZE 1049000
 #define MAX_OBJECT_SIZE 102400
 
+// 캐시 구조체
+typedef struct {
+    char *request;  // 요청의 복사본을 가리키는 포인터
+    char *response; // 응답 본체를 가리키는 포인터
+    size_t size;    // 응답 본체의 크기
+    time_t timestamp;   // 최근 접근 시간
+} CacheEntry;
+
+typedef struct {
+    CacheEntry *entries;
+    int count;
+    int capacity;
+    size_t current_size;
+    pthread_mutex_t lock;
+} Cache;
+
+
 // function prototype
 int doit(int fd);
 void *thread(void *vargp);
@@ -198,4 +215,80 @@ void clienterror(int fd, char *cause, char *errnum, char *shortmsg, char *longms
     sprintf(buf, "Content-length: %d\r\n\r\n", (int)strlen(body));
     rio_writen(fd, buf, strlen(buf));
     rio_writen(fd, body, strlen(body));
+}
+
+/* cache 함수들 */
+
+// 캐시 초기화
+void cache_init(Cache *cache, int capacity) {
+    cache->entries = Malloc(sizeof(CacheEntry) * capacity);
+    cache->count = 0;
+    cache->capacity = capacity;
+    cache->current_size = 0;
+    pthread_mutex_init(&cache->lock, NULL);
+}
+
+// 캐시 전체 삭제
+void cache_free(Cache *cache) {
+    for (int i = 0; i < cache->count; i++) {
+        Free(cache->entries[i].request);
+        Free(cache->entries[i].response);
+    }
+    Free(cache->entries);
+    pthread_mutex_destroy(&cache->lock);
+}
+
+int cache_find(Cache *cache, char *request) {
+    for (int i = 0; i < cache->count; i++) {
+        if (strcmp(cache->entries[i].request, request) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+// 캐시에서 데이터 제거
+void cache_evict(Cache *cache) {
+    int oldest_index = 0;
+    time_t oldest = cache->entries[0].timestamp;
+    for (int i = 1; i < cache->count; i++) {
+        if (cache->entries[i].timestamp < oldest) {
+            oldest = cache->entries[i].timestamp;
+            oldest_index = i;
+        }
+    }
+    Free(cache->entries[oldest_index].request);
+    Free(cache->entries[oldest_index].response);
+    cache->current_size -= cache->entries[oldest_index].size;
+    cache->entries[oldest_index] = cache->entries[cache->count - 1]; // 방금 free한 빈공간에 맨뒤 말록을 끼워넣기 위해.
+    cache->count--;
+}
+
+// 데이터를 캐시에 추가
+void cache_add(Cache *cache, char *request, char *response, size_t size) {
+    pthread_mutex_lock(&cache->lock);
+    // 캐시 용량을 초과시 가장 오래된 항목 제거.
+    if (cache->current_size + size > MAX_CACHE_SIZE || cache->count == cache->capacity) {
+        cache_evict(cache);
+    }
+    cache->entries[cache->count].request = strdup(request);     // 요청 캐시 본체가 실질적으로 저장되는 함수. strdup 문자열 복사본을 동적으로 할당후 주소 반환.
+    cache->entries[cache->count].response = strdup(response);   // 응답 캐시 본체가 ""
+    cache->entries[cache->count].size = size;
+    cache->entries[cache->count].timestamp = time(NULL);
+    cache->current_size += size;
+    cache->count++;
+    pthread_mutex_unlock(&cache->lock);
+}
+
+
+/* 클라이언트에게 캐시 반환하는 함수.
+ * 쓰기 도중 읽기를 하면 문제가 생겨서 뮤텍스로 관리.
+ */
+void cache_retrieve(Cache *cache, int index, char *buf, size_t buf_size) {
+    pthread_mutex_lock(&cache->lock);
+    if (index >= 0 && index < cache->count) {
+        strncpy(buf, cache->entries[index].response, buf_size);
+        cache->entries[index].timestamp = time(NULL); // 최근 사용 시간 업데이트
+    }
+    pthread_mutex_unlock(&cache->lock);
 }
