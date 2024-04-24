@@ -24,7 +24,7 @@ typedef struct {
 
 // 캐시 선언
 Cache cache;
-int capacity = 10000;    // 캐시에 저장될 객체 수. 검색시간이 너무 늘어나지않게 혹은 캐시 삭제 확인해보기 위해 추가함.
+int capacity = 10000;  // 캐시에 저장될 객체 수. 검색시간이 너무 늘어나지않게 혹은 캐시 삭제 확인해보기 위해 추가함.
 
 // function prototype
 int doit(int fd);
@@ -123,7 +123,7 @@ int doit(int fd) {
 
     // 캐시 검색
     int cache_index = cache_find(&cache, buf);
-    if (cache_index != -1) { // 캐시 히트
+    if (cache_index != -1) {  // 캐시 히트
         printf("Cache hit. Retrieving from cache...\n");
         char cached_response[MAX_OBJECT_SIZE];
         cache_retrieve(&cache, cache_index, cached_response, sizeof(cached_response));
@@ -161,22 +161,26 @@ int doit(int fd) {
 // Forward the HTTP response from server to client
 void forward_request(int clientfd, int serverfd, char *request) {
     char buf[MAXLINE];
-    char response[MAXLINE];
+    char *response = Malloc(MAX_OBJECT_SIZE);  // heap 영역에 저장하기위해.
 
     ssize_t n;
     ssize_t received_size = 0;
 
     while ((n = Rio_readn(serverfd, buf, MAXLINE)) > 0) {
-        // printf("Proxy received %zd bytes, now sending...\n", n);
-        received_size += n;
-        // strncat(server_response, buf, n);
         rio_writen(clientfd, buf, n);
+        // printf("Proxy received %zd bytes, now sending...\n", n);
+        if (received_size + n <= MAX_OBJECT_SIZE) {
+            memcpy(response + received_size, buf, n);
+        }
+        received_size += n;
     }
     printf("Proxy received %zd bytes, and sended to client\n", received_size);
 
-    if (received_size < MAX_OBJECT_SIZE) {
-        cache_add(&cache, request, buf, received_size);
+    if (received_size <= MAX_OBJECT_SIZE) {
+        cache_add(&cache, request, response, received_size);
     }
+
+    Free(response);
 }
 
 // parse uri
@@ -309,9 +313,10 @@ void cache_add(Cache *cache, char *request, char *response, size_t size) {
     if (cache->current_size + size > MAX_CACHE_SIZE || cache->count == cache->capacity) {
         cache_evict(cache);
     }
-    cache->entries[cache->count].request = strdup(request);    // 요청 캐시 본체가 실질적으로 저장되는 함수. strdup 문자열 복사본을 동적으로 할당후 주소 반환.
-    cache->entries[cache->count].response = Malloc(size);  // 응답을 위한 메모리 할당.
+    cache->entries[cache->count].request = strdup(request);         // 요청 캐시 본체가 실질적으로 저장되는 함수. strdup 문자열 복사본을 동적으로 할당후 주소 반환.
+    cache->entries[cache->count].response = Malloc(size);           // 응답을 위한 메모리 할당.
     memcpy(cache->entries[cache->count].response, response, size);  // 응답 복사
+    
     cache->entries[cache->count].size = size;
     cache->entries[cache->count].timestamp = time(NULL);
     cache->current_size += size;
@@ -327,8 +332,9 @@ void cache_add(Cache *cache, char *request, char *response, size_t size) {
 void cache_retrieve(Cache *cache, int index, char *buf, size_t buf_size) {
     pthread_mutex_lock(&cache->lock);
     if (index >= 0 && index < cache->count) {
-        strncpy(buf, cache->entries[index].response, buf_size);
-        cache->entries[index].timestamp = time(NULL);  // 최근 사용 시간 업데이트
+        // 버퍼 크기와 캐시된 응답 크기 중 작은 것을 선택하여 복사
+        size_t copy_size = (buf_size < cache->entries[index].size) ? buf_size : cache->entries[index].size;
+        memcpy(buf, cache->entries[index].response, copy_size);  // memcpy로 이진 데이터 안전 복사
     }
     pthread_mutex_unlock(&cache->lock);
 }
