@@ -1,5 +1,5 @@
 #include <stdio.h>
-
+#include <time.h>   // time 함수를 위해 추가
 #include "csapp.h"  // 기본적인 시스템 호출 및 소켓 관련 함수들
 
 /* 최대 캐시 및 객체 크기 정의 */
@@ -24,7 +24,7 @@ typedef struct {
 
 // 캐시 선언
 Cache cache;
-int capacity = 10000;  // 캐시에 저장될 객체 수. 검색시간이 너무 늘어나지않게 혹은 캐시 삭제 확인해보기 위해 추가함.
+int capacity = 10000;  // 캐시에 저장될 객체 수. 검색시간이 너무 늘어나지않게하기 위함과 캐시기능 디버깅을 위해 추가함.
 
 // function prototype
 int doit(int fd);
@@ -59,7 +59,7 @@ int main(int argc, char **argv) {
     }
 
     cache_init(&cache, capacity);  // 캐시 초기화
-    signal(SIGPIPE, SIG_IGN);      // SIGPIPE 시그널을 무시한다. (연결이 끊긴 파일디스크립터에 write를 하려고할때 생기는 시그널)
+    signal(SIGPIPE, SIG_IGN);      // SIGPIPE 시그널을 무시한다. (연결이 끊긴 파일디스크립터에 write를 하려고할때 생기는 시그널) 서버 안죽게 할려고 추가함.
 
     listenfd = Open_listenfd(argv[1]);                               // 지정된 포트로 리스닝 소켓을 열고, 해당 소켓의 fd를 listenfd에 저장
     while (1) {                                                      // 무한 루프를 시작합니다. 서버는 계속해서 클라이언트의 연결 요청을 기다립니다.
@@ -123,7 +123,7 @@ int doit(int fd) {
 
     // 캐시 검색
     int cache_index = cache_find(&cache, buf);
-    if (cache_index != -1) {  
+    if (cache_index != -1) {
         // 캐시 히트 했다면 캐시 전달.
         printf("Cache hit. Retrieving from cache...\n");
         char cached_response[MAX_OBJECT_SIZE];
@@ -163,7 +163,7 @@ int doit(int fd) {
 // Forward the HTTP response from server to client
 void forward_request(int clientfd, int serverfd, char *request) {
     char buf[MAXLINE];
-    char *response = Malloc(MAX_OBJECT_SIZE);  // heap 영역에 저장하기위해.
+    char *response = Malloc(MAX_OBJECT_SIZE);  // heap 영역에 저장하기위해. 일반적으로 스택 메모리 크기는 1MB 정도이다. 만약 MAX_OBJECT_SIZE가 클경우를 대비했음.
 
     ssize_t n;
     ssize_t received_size = 0;
@@ -206,6 +206,9 @@ int parse_uri(char *uri, char *hostname, char *port, char *pathname) {
         *pos = '\0';
         sscanf(start, "%s", hostname);
         sscanf(pos + 1, "%[^/]", port);
+        /*'/' 문자가 나타나기 전까지의 모든 문자를 읽음.
+         * % 형식 지정자의 시작. '[', ']'는 문자 집합의 시작과 끝. '^'는 이 기호 바로 뒤 문자를 제외한 문자를 읽어라.
+         */
         start = pos + strlen(port) + 1;
     } else {
         // 포트가 명시되지 않았다면 기본 포트를 사용.
@@ -318,7 +321,7 @@ void cache_add(Cache *cache, char *request, char *response, size_t size) {
     cache->entries[cache->count].request = strdup(request);         // 요청 캐시 본체가 실질적으로 저장되는 함수. strdup 문자열 복사본을 동적으로 할당후 주소 반환.
     cache->entries[cache->count].response = Malloc(size);           // 응답을 위한 메모리 할당.
     memcpy(cache->entries[cache->count].response, response, size);  // 응답 복사
-    
+
     cache->entries[cache->count].size = size;
     cache->entries[cache->count].timestamp = time(NULL);
     cache->current_size += size;
