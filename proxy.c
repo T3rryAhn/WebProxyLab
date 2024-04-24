@@ -71,7 +71,7 @@ int main(int argc, char **argv) {
                     client_port, MAXLINE, 0);                        // 포트 번호를 문자열로 변환합니다.
         printf("\n######### New Connection #########\n");
         printf("Connected to (%s, %s)\n", client_hostname, client_port);  // 클라이언트의 호스트 이름과 포트 번호를 출력합니다.
-        printf("%s\n", user_agent_hdr);
+        printf("%s", user_agent_hdr);
         Pthread_create(&tid, NULL, thread, connfdp);
     }
     cache_free(&cache);
