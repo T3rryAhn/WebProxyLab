@@ -8,10 +8,10 @@
 
 // 캐시 구조체
 typedef struct {
-    char *request;  // 요청의 복사본을 가리키는 포인터
-    char *response; // 응답 본체를 가리키는 포인터
-    size_t size;    // 응답 본체의 크기
-    time_t timestamp;   // 최근 접근 시간
+    char *request;     // 요청의 복사본을 가리키는 포인터
+    char *response;    // 응답 본체를 가리키는 포인터
+    size_t size;       // 응답 본체의 크기
+    time_t timestamp;  // 최근 접근 시간
 } CacheEntry;
 
 typedef struct {
@@ -22,13 +22,24 @@ typedef struct {
     pthread_mutex_t lock;
 } Cache;
 
+// 캐시 선언
+Cache cache;
+int capacity = 1000;    // 캐시에 저장될 객체 수. 검색시간관련?
 
 // function prototype
 int doit(int fd);
 void *thread(void *vargp);
-void forward_request(int clientfd, int serverfd);
+void forward_request(int clientfd, int serverfd, char *request);
 int parse_uri(char *uri, char *hostname, char *port, char *path);
 void clienterror(int fd, char *cause, char *errnum, char *shortmsg, char *longmsg);
+
+// cache function prototype
+void cache_init(Cache *cache, int capacity);
+void cache_free(Cache *cache);
+int cache_find(Cache *cache, char *request);
+void cache_evict(Cache *cache);
+void cache_add(Cache *cache, char *request, char *response, size_t size);
+void cache_retrieve(Cache *cache, int index, char *buf, size_t buf_size);
 
 /* You won't lose style points for including this long line in your code */
 static const char *user_agent_hdr =
@@ -47,7 +58,8 @@ int main(int argc, char **argv) {
         exit(0);
     }
 
-    signal(SIGPIPE, SIG_IGN);  // SIGPIPE 시그널을 무시한다. (연결이 끊긴 파일디스크립터에 write를 하려고할때 생기는 시그널)
+    cache_init(&cache, capacity);  // 캐시 초기화
+    signal(SIGPIPE, SIG_IGN);      // SIGPIPE 시그널을 무시한다. (연결이 끊긴 파일디스크립터에 write를 하려고할때 생기는 시그널)
 
     listenfd = Open_listenfd(argv[1]);                               // 지정된 포트로 리스닝 소켓을 열고, 해당 소켓의 fd를 listenfd에 저장
     while (1) {                                                      // 무한 루프를 시작합니다. 서버는 계속해서 클라이언트의 연결 요청을 기다립니다.
@@ -62,6 +74,7 @@ int main(int argc, char **argv) {
         printf("%s\n", user_agent_hdr);
         Pthread_create(&tid, NULL, thread, connfdp);
     }
+    cache_free(&cache);
     return 0;  // 메인 함수 종료
 }
 
@@ -80,6 +93,7 @@ int doit(int fd) {
     char hostname[MAXLINE], path[MAXLINE], port[MAXLINE];
     rio_t rio, server_rio;
     int serverfd;
+    char request[MAXLINE];
 
     // Read request line and headers
     Rio_readinitb(&rio, fd);                 // rio 구조체 초기화 및 fd와 연결
@@ -87,6 +101,7 @@ int doit(int fd) {
         return;
 
     printf("Request: %s\n", buf);
+    strcpy(request, buf);
 
     sscanf(buf, "%s %s %s", method, uri, version);  // 요청 라인 파싱하여 메소드 uri, 버전 정보 추출
     if (strcasecmp(method, "GET") && strcasecmp(method, "HEAD")) {
@@ -106,6 +121,18 @@ int doit(int fd) {
         return;  // Just return without sending any response
     }
 
+    // 캐시 검색
+    int cache_index = cache_find(&cache, buf);
+    if (cache_index != -1) { // 캐시 히트
+        printf("Cache hit. Retrieving from cache...\n");
+        char cached_response[MAX_OBJECT_SIZE];
+        cache_retrieve(&cache, cache_index, cached_response, sizeof(cached_response));
+        rio_writen(fd, cached_response, strlen(cached_response));
+        return;
+    }
+    // 없다면(캐시 미스) 아래 실행
+    printf("Cache miss. Fetching from server ...\n");
+
     // Connect to the target server
     printf("Connect to {method: %s, hostname: %s, port: %s, path: %s}\n", method, hostname, port, path);
     serverfd = open_clientfd(hostname, port);  // 대상 서버에 연결
@@ -124,24 +151,32 @@ int doit(int fd) {
     rio_writen(serverfd, buf, strlen(buf));
 
     // Transfer the response back to the client
+    // and save in to cache
     Rio_readinitb(&server_rio, serverfd);
-    forward_request(fd, serverfd);
-
+    forward_request(fd, serverfd, request);
     Close(serverfd);
     return 0;
 }
 
 // Forward the HTTP response from server to client
-void forward_request(int clientfd, int serverfd) {
+void forward_request(int clientfd, int serverfd, char *request) {
     char buf[MAXLINE];
+    char response[MAXLINE];
+
     ssize_t n;
     ssize_t received_size = 0;
+
     while ((n = Rio_readn(serverfd, buf, MAXLINE)) > 0) {
         // printf("Proxy received %zd bytes, now sending...\n", n);
         received_size += n;
+        // strncat(server_response, buf, n);
         rio_writen(clientfd, buf, n);
     }
     printf("Proxy received %zd bytes, and sended to client\n", received_size);
+
+    if (received_size < MAX_OBJECT_SIZE) {
+        cache_add(&cache, request, buf, received_size);
+    }
 }
 
 // parse uri
@@ -260,7 +295,7 @@ void cache_evict(Cache *cache) {
     Free(cache->entries[oldest_index].request);
     Free(cache->entries[oldest_index].response);
     cache->current_size -= cache->entries[oldest_index].size;
-    cache->entries[oldest_index] = cache->entries[cache->count - 1]; // 방금 free한 빈공간에 맨뒤 말록을 끼워넣기 위해.
+    cache->entries[oldest_index] = cache->entries[cache->count - 1];  // 방금 free한 빈공간에 맨뒤 말록을 끼워넣기 위해.
     cache->count--;
 }
 
@@ -271,15 +306,14 @@ void cache_add(Cache *cache, char *request, char *response, size_t size) {
     if (cache->current_size + size > MAX_CACHE_SIZE || cache->count == cache->capacity) {
         cache_evict(cache);
     }
-    cache->entries[cache->count].request = strdup(request);     // 요청 캐시 본체가 실질적으로 저장되는 함수. strdup 문자열 복사본을 동적으로 할당후 주소 반환.
-    cache->entries[cache->count].response = strdup(response);   // 응답 캐시 본체가 ""
+    cache->entries[cache->count].request = strdup(request);    // 요청 캐시 본체가 실질적으로 저장되는 함수. strdup 문자열 복사본을 동적으로 할당후 주소 반환.
+    cache->entries[cache->count].response = strdup(response);  // 응답 캐시 본체가 ""
     cache->entries[cache->count].size = size;
     cache->entries[cache->count].timestamp = time(NULL);
     cache->current_size += size;
     cache->count++;
     pthread_mutex_unlock(&cache->lock);
 }
-
 
 /* 클라이언트에게 캐시 반환하는 함수.
  * 쓰기 도중 읽기를 하면 문제가 생겨서 뮤텍스로 관리.
@@ -288,7 +322,7 @@ void cache_retrieve(Cache *cache, int index, char *buf, size_t buf_size) {
     pthread_mutex_lock(&cache->lock);
     if (index >= 0 && index < cache->count) {
         strncpy(buf, cache->entries[index].response, buf_size);
-        cache->entries[index].timestamp = time(NULL); // 최근 사용 시간 업데이트
+        cache->entries[index].timestamp = time(NULL);  // 최근 사용 시간 업데이트
     }
     pthread_mutex_unlock(&cache->lock);
 }
