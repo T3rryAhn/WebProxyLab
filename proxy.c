@@ -271,6 +271,7 @@ void cache_free(Cache *cache) {
     }
     Free(cache->entries);
     pthread_mutex_destroy(&cache->lock);
+    printf("cache freed");
 }
 
 int cache_find(Cache *cache, char *request) {
@@ -297,6 +298,8 @@ void cache_evict(Cache *cache) {
     cache->current_size -= cache->entries[oldest_index].size;
     cache->entries[oldest_index] = cache->entries[cache->count - 1];  // 방금 free한 빈공간에 맨뒤 말록을 끼워넣기 위해.
     cache->count--;
+
+    printf("cache deleted %s bytes\n", cache->entries[oldest_index].size);
 }
 
 // 데이터를 캐시에 추가
@@ -312,7 +315,9 @@ void cache_add(Cache *cache, char *request, char *response, size_t size) {
     cache->entries[cache->count].timestamp = time(NULL);
     cache->current_size += size;
     cache->count++;
+
     pthread_mutex_unlock(&cache->lock);
+    printf("cache added, request: %s, bytes: %d\n", request, size);
 }
 
 /* 클라이언트에게 캐시 반환하는 함수.
